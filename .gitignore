@@ -1,0 +1,20 @@
+# --- 隐私配置文件 (绝对不能上传) ---
+path_config.bat
+
+# --- Python 缓存与环境 ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- 打包产生的临时文件夹 (体积很大，不需要上传) ---
+build/
+dist/
+*.spec
+
+# --- IDE 配置 (不需要上传) ---
+.vscode/
+.idea/
+
+# --- 虚拟环境 (如果有人不小心建在里面) ---
+venv/
+env/
