@@ -151,25 +151,35 @@ class CompressionToolApp(TkinterDnD.Tk):
         self.process_files(path_list)
 
     def parse_drop_files(self, raw_data):
-        # tkinterdnd2 的路径解析可能会有点复杂
-        # 简单的一行代码往往不够，但这里我们尽量简化
-        # 如果包含 {}，说明有空格或多个文件
-        paths = []
-        if raw_data.startswith('{'):
-            parts = raw_data.split('} {')
-            for p in parts:
-                p = p.strip('{}')
-                paths.append(p)
-        else:
-            paths = [raw_data]
-        return paths
+        # 使用 TkinterDnD 内置的 splitlist 方法处理路径
+        # 它能正确处理带空格的路径（会被 {} 包裹的情况）
+        try:
+            return self.tk.splitlist(raw_data)
+        except:
+            # 兼容性备选方案
+            if raw_data.startswith('{'):
+                import re
+                return re.findall(r'\{(.*?)\}', raw_data) or [raw_data.strip('{}')]
+            return raw_data.split()
 
     def process_files(self, paths):
         # 1. 收集所有图片文件
         self.files_to_process = []
-        supported = ('.jpg', '.jpeg', '.png', '.webp', '.bmp')
+        # 扩展支持的格式
+        supported = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff', '.jfif')
         
+        # 确保 paths 是列表
+        if isinstance(paths, str):
+            paths = [paths]
+
         for p in paths:
+            # 移除可能存在的引号和处理 Windows 路径
+            p = p.strip().strip('"').strip("'")
+            if not p:
+                continue
+            
+            p = os.path.normpath(p) # 标准化路径
+            
             if os.path.isfile(p):
                 if p.lower().endswith(supported):
                     self.files_to_process.append(p)
@@ -177,7 +187,11 @@ class CompressionToolApp(TkinterDnD.Tk):
                 for root, _, files in os.walk(p):
                     for f in files:
                         if f.lower().endswith(supported):
-                            self.files_to_process.append(os.path.join(root, f))
+                            full_path = os.path.normpath(os.path.join(root, f))
+                            self.files_to_process.append(full_path)
+                            
+        # 去重
+        self.files_to_process = list(dict.fromkeys(self.files_to_process))
                             
         if not self.files_to_process:
             messagebox.showwarning("提示", "未找到支持的图片文件！")
