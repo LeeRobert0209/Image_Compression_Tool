@@ -1,5 +1,7 @@
 import os
-from PIL import Image, ImageFile
+from PIL import Image, ImageFile, ImageSequence
+import fitz # PyMuPDF
+
 from io import BytesIO
 
 # 防止 Pillow 报错 "Image file truncated"
@@ -7,7 +9,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class ImageCompressor:
     def __init__(self):
-        self.supported_formats = ('.jpg', '.jpeg', '.png', '.webp', '.bmp')
+        self.supported_formats = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.pdf')
 
     def compress_image(self, file_path, output_path, target_size_kb=None, 
                        max_width=None, to_webp=False, quality=95, fixed_quality=False):
@@ -22,6 +24,15 @@ class ImageCompressor:
         :param fixed_quality: 是否使用固定质量模式
         :return: (success, message, final_size_kb)
         """
+        # 预检查文件类型
+        ext = os.path.splitext(file_path)[1].lower()
+        
+        if ext == '.pdf':
+            return self.compress_pdf(file_path, output_path)
+            
+        if ext == '.gif':
+            return self.compress_gif(file_path, output_path, max_width, to_webp)
+
         try:
             # 打开图片
             with Image.open(file_path) as img:
@@ -97,6 +108,67 @@ class ImageCompressor:
 
         except Exception as e:
             return False, str(e), 0
+
+    def compress_gif(self, file_path, output_path, max_width=None, to_webp=False):
+        try:
+            with Image.open(file_path) as img:
+                frames = []
+                # 遍历所有帧
+                for frame in ImageSequence.Iterator(img):
+                    f = frame.copy()
+                    
+                    # 调整大小
+                    if max_width and f.width > max_width:
+                        ratio = max_width / f.width
+                        new_height = int(f.height * ratio)
+                        f = f.resize((max_width, new_height), Image.Resampling.LANCZOS)
+                    
+                    if to_webp:
+                        if f.mode not in ('RGB', 'RGBA'):
+                            f = f.convert('RGBA')
+                    
+                    frames.append(f)
+
+                if not frames:
+                    return False, "No frames found", 0
+
+                # 保存
+                if to_webp or output_path.lower().endswith('.webp'):
+                    # 保存为 WebP (支持动画)
+                    frames[0].save(
+                        output_path, 
+                        save_all=True, 
+                        append_images=frames[1:], 
+                        optimize=True,
+                        quality=80,
+                        method=6
+                    )
+                else:
+                    # 保存为 GIF
+                    frames[0].save(
+                        output_path, 
+                        save_all=True, 
+                        append_images=frames[1:], 
+                        optimize=True
+                    )
+                
+                size_kb = os.path.getsize(output_path) / 1024
+                return True, "GIF Optimized", size_kb
+
+        except Exception as e:
+            return False, f"GIF Error: {e}", 0
+
+    def compress_pdf(self, file_path, output_path):
+        try:
+            doc = fitz.open(file_path)
+            # 使用 garbage=4 (去重+清理) 和 deflate=True (压缩流)
+            doc.save(output_path, garbage=4, deflate=True)
+            doc.close()
+            
+            size_kb = os.path.getsize(output_path) / 1024
+            return True, "PDF Compressed", size_kb
+        except Exception as e:
+            return False, f"PDF Error: {e}", 0
 
     def process_queue(self, file_list, output_dir, params, progress_callback=None):
         """

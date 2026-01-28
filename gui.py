@@ -17,13 +17,29 @@ class CompressionToolApp(TkinterDnD.Tk):
         super().__init__()
         
         self.title("图片极限压缩工具 v1.0")
-        self.geometry("600x500")
+        self.geometry("400x500")
         self.configure(bg=COLOR_BG)
 
         self.compressor = ImageCompressor()
         self.files_to_process = []
         
         self._init_ui()
+        
+
+        
+        # 延时强制显示窗口，确保主循环启动后再执行
+        self.after(200, self.force_show_window)
+        
+    def force_show_window(self):
+        try:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            # 短暂置顶
+            self.attributes("-topmost", True)
+            self.after(100, lambda: self.attributes("-topmost", False))
+        except Exception as e:
+            print(f"Window activation error: {e}")
         
     def _init_ui(self):
         # 1. 顶部标题区
@@ -33,13 +49,13 @@ class CompressionToolApp(TkinterDnD.Tk):
         tk.Label(header_frame, text="支持拖拽文件或文件夹 | 智能压缩 | 格式转换", font=FONT_MAIN, bg=COLOR_BG, fg="#666").pack()
 
         # 2. 拖拽区域 (核心)
-        self.drop_frame = tk.LabelFrame(self, text="  操作区域  ", font=FONT_BOLD, bg=COLOR_BG, fg="#333", width=560, height=150)
+        self.drop_frame = tk.LabelFrame(self, text="  操作区域  ", font=FONT_BOLD, bg=COLOR_BG, fg="#333", width=360, height=150)
         self.drop_frame.pack(pady=10, padx=20, fill='x')
         self.drop_frame.pack_propagate(False) # 固定大小
         
         self.lbl_drop = tk.Label(self.drop_frame, 
-                                 text="👇 请将图片或文件夹拖入此处 👇\n\n(支持 JPG, PNG, WebP)", 
-                                 font=('SimSun', 12), bg="white", fg="#888",
+                                 text="👇 请将图片或文件夹拖入此处 👇\n\n(支持 JPG, PNG, WebP, GIF, PDF)", 
+                                 font=('SimSun', 11), bg="white", fg="#888",
                                  relief="groove", borderwidth=2, cursor="hand2")
         self.lbl_drop.pack(expand=True, fill='both', padx=10, pady=10)
         
@@ -91,11 +107,15 @@ class CompressionToolApp(TkinterDnD.Tk):
         self.var_webp = tk.BooleanVar(value=False)
         ttk.Checkbutton(row3, text="转换为 WebP 格式 (体积更小，画质更好)", variable=self.var_webp).pack(side='left')
 
+        # 3.6 覆盖源文件
+        self.var_overwrite = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row3, text="覆盖源文件", variable=self.var_overwrite).pack(side='left', padx=15)
+
         # 4. 底部状态与按钮
         bottom_frame = tk.Frame(self, bg=COLOR_BG, pady=10)
         bottom_frame.pack(fill='x', side='bottom')
         
-        self.progress = ttk.Progressbar(bottom_frame, orient='horizontal', length=400, mode='determinate')
+        self.progress = ttk.Progressbar(bottom_frame, orient='horizontal', length=300, mode='determinate')
         self.progress.pack(pady=5, padx=20, fill='x')
         
         self.lbl_status = tk.Label(bottom_frame, text="准备就绪", font=FONT_MAIN, bg=COLOR_BG, fg="#555")
@@ -141,7 +161,7 @@ class CompressionToolApp(TkinterDnD.Tk):
             self.combo_width['state'] = 'disabled'
 
     def on_click_select(self, event):
-        files = filedialog.askopenfilenames(title="选择图片", filetypes=[("Images", "*.jpg *.jpeg *.png *.webp")])
+        files = filedialog.askopenfilenames(title="选择图片", filetypes=[("Files", "*.jpg *.jpeg *.png *.webp *.gif *.pdf")])
         if files:
             self.process_files(list(files))
 
@@ -166,7 +186,7 @@ class CompressionToolApp(TkinterDnD.Tk):
         # 1. 收集所有图片文件
         self.files_to_process = []
         # 扩展支持的格式
-        supported = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff', '.jfif')
+        supported = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff', '.jfif', '.gif', '.pdf')
         
         # 确保 paths 是列表
         if isinstance(paths, str):
@@ -197,7 +217,11 @@ class CompressionToolApp(TkinterDnD.Tk):
             messagebox.showwarning("提示", "未找到支持的图片文件！")
             return
             
-        confirm = messagebox.askyesno("确认", f"找到 {len(self.files_to_process)} 张图片。\n\n是否开始压缩？\n\n输出目录将在源文件夹下的 '_compressed' 中。")
+        msg_dest = "输出目录将在源文件夹下的 '_compressed' 中。"
+        if self.var_overwrite.get():
+             msg_dest = "⚠️ 注意：将直接覆盖源文件！"
+        
+        confirm = messagebox.askyesno("确认", f"找到 {len(self.files_to_process)} 个文件。\n\n是否开始压缩？\n\n{msg_dest}")
         if confirm:
             self.start_compression_thread()
 
@@ -214,7 +238,8 @@ class CompressionToolApp(TkinterDnD.Tk):
             'quality': self.var_quality.get() if mode == 'fixed' else 95,
             'fixed_quality': (mode == 'fixed'),
             'max_width': int(self.combo_width.get()) if self.var_resize.get() else None,
-            'to_webp': self.var_webp.get()
+            'to_webp': self.var_webp.get(),
+            'overwrite': self.var_overwrite.get()
         }
         
         # 开启线程
@@ -232,26 +257,63 @@ class CompressionToolApp(TkinterDnD.Tk):
             self.update_progress(i, len(self.files_to_process), os.path.basename(file_path))
             
             try:
-                if not os.path.exists(out_dir):
-                    os.makedirs(out_dir)
+                # 覆盖逻辑判断
+                overwrite = params.get('overwrite', False)
+                if overwrite:
+                    out_dir = src_dir
+                else:
+                    if not os.path.exists(out_dir):
+                        os.makedirs(out_dir)
                 
                 name, ext = os.path.splitext(os.path.basename(file_path))
-                if params['to_webp']:
+                
+                # 保留原始后缀逻辑 (针对 PDF)
+                is_pdf = (ext.lower() == '.pdf')
+                is_gif = (ext.lower() == '.gif')
+                
+                if params['to_webp'] and not is_pdf: # PDF 不转 WebP
                     out_name = f"{name}.webp"
+                elif is_gif and not params['to_webp']:
+                     out_name = f"{name}.gif"
+                elif is_pdf:
+                     out_name = f"{name}.pdf"
                 else:
                     out_name = f"{name}.jpg"
                 
                 out_path = os.path.join(out_dir, out_name)
                 
+                # 处理覆盖时的文件占用问题
+                is_same_file = (os.path.normpath(file_path) == os.path.normpath(out_path))
+                temp_path = None
+                
+                if is_same_file:
+                    temp_path = out_path + ".tmp"
+                    target_path = temp_path
+                else:
+                    target_path = out_path
+                
                 ok, msg, size = self.compressor.compress_image(
-                    file_path, out_path, 
+                    file_path, target_path, 
                     target_size_kb=params.get('target_size_kb'),
                     max_width=params.get('max_width'),
                     to_webp=params.get('to_webp'),
                     quality=params.get('quality'),
                     fixed_quality=params.get('fixed_quality')
                 )
-                if ok: success_count += 1
+                
+                if ok:
+                    if is_same_file and temp_path:
+                        # 压缩成功后替换原文件
+                        try:
+                            if os.path.exists(out_path):
+                                os.remove(out_path)
+                            os.rename(temp_path, out_path)
+                        except Exception as e:
+                            print(f"Error replacing file {out_path}: {e}")
+                            msg = f"Error replacing: {e}"
+                            ok = False
+                    
+                    success_count += 1
                 
             except Exception as e:
                 print(f"Error processing {file_path}: {e}")
@@ -270,9 +332,14 @@ class CompressionToolApp(TkinterDnD.Tk):
         self.after(0, lambda: self._show_complete(count))
 
     def _show_complete(self, count):
-        self.lbl_drop.config(state='normal', text="👇 请将图片或文件夹拖入此处 👇\n\n(支持 JPG, PNG, WebP)")
-        self.lbl_status.config(text=f"处理完成！成功压缩 {count} 张图片。")
-        messagebox.showinfo("完成", f"已完成！\n成功: {count}\n\n图片已保存至各源文件夹下的 '_compressed' 目录中。")
+        self.lbl_drop.config(state='normal', text="👇 请将图片或文件夹拖入此处 👇\n\n(支持 JPG, PNG, WebP, GIF, PDF)")
+        self.lbl_status.config(text=f"处理完成！成功压缩 {count} 个文件。")
+        
+        msg_dest = "文件已保存至各源文件夹下的 '_compressed' 目录中。"
+        if self.var_overwrite.get():
+             msg_dest = "源文件已成功被覆盖/更新。"
+             
+        messagebox.showinfo("完成", f"已完成！\n成功: {count}\n\n{msg_dest}")
 
 if __name__ == "__main__":
     try:

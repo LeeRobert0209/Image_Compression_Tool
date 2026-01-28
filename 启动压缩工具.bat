@@ -43,7 +43,7 @@ if not exist "%PYTHON_EXE%" (
 
 :: 2. 检查依赖并自动安装
 echo [检查依赖库] ...
-"%PYTHON_EXE%" -c "import PIL, tkinterdnd2" >nul 2>&1
+"%PYTHON_EXE%" -c "import PIL, tkinterdnd2, fitz" >nul 2>&1
 if %errorlevel% neq 0 (
     echo [提示] 首次运行，正在安装必要组件...
     "%PYTHON_EXE%" -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
