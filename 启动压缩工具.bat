@@ -6,16 +6,18 @@ title 图片极限压缩工具启动器
 set "PYTHON_EXE=python"
 set "PYTHONW_EXE=pythonw"
 
-:: 1. 尝试加载本地私有配置
-if exist "path_config.bat" (
-    :: 先调用配置脚本
-    call path_config.bat
+:: 1. 尝试加载 config.ini 配置
+if exist "config.ini" (
+    for /f "usebackq tokens=1* delims==" %%A in ("config.ini") do (
+        if /i "%%A"=="python_path" set "PYTHON_EXE=%%B"
+    )
 )
 
-:: 2. 如果配置脚本运行后，自定义变量有值，则使用自定义变量
-if defined MY_PYTHON_EXE (
-    set "PYTHON_EXE=%MY_PYTHON_EXE%"
-    set "PYTHONW_EXE=%MY_PYTHONW_EXE%"
+:: 2. 自动推断 pythonw 路径
+if /i "%PYTHON_EXE%"=="python" (
+    set "PYTHONW_EXE=pythonw"
+) else (
+    set "PYTHONW_EXE=%PYTHON_EXE:python.exe=pythonw.exe%"
 )
 
 echo ==================================================
@@ -35,7 +37,7 @@ if not exist "%PYTHON_EXE%" (
          echo [错误] 无法运行 Python: %PYTHON_EXE%
          echo.
          echo [提示] 如果未安装 Python，请访问 python.org 下载
-         echo (或者检查 path_config.bat 中的路径是否正确)
+         echo (或者检查 config.ini 中的路径是否正确)
          pause
          exit
     )
