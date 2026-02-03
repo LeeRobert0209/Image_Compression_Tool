@@ -18,3 +18,7 @@ dist/
 # --- 虚拟环境 (如果有人不小心建在里面) ---
 venv/
 env/
+
+
+# Config
+config.ini
