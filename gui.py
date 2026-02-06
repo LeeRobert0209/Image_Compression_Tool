@@ -277,6 +277,10 @@ class CompressionToolApp(TkinterDnD.Tk):
                      out_name = f"{name}.gif"
                 elif is_pdf:
                      out_name = f"{name}.pdf"
+                elif ext.lower() == '.png':
+                     out_name = f"{name}.png"
+                elif ext.lower() == '.webp':
+                     out_name = f"{name}.webp"
                 else:
                     out_name = f"{name}.jpg"
                 

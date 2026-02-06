@@ -36,12 +36,24 @@ class ImageCompressor:
         try:
             # 打开图片
             with Image.open(file_path) as img:
-                # 转换颜色模式
+                # 转换颜色模式 & 确定保存格式
+                out_ext = os.path.splitext(output_path)[1].lower()
+                
                 if to_webp:
                     save_format = 'WEBP'
                     if img.mode not in ('RGB', 'RGBA'):
                         img = img.convert('RGBA')
+                elif out_ext == '.png':
+                    save_format = 'PNG'
+                    # PNG supports RGBA, keep it if present
+                    if img.mode not in ('RGB', 'RGBA', 'P'):
+                        img = img.convert('RGBA')
+                elif out_ext == '.webp': 
+                    save_format = 'WEBP'
+                    if img.mode not in ('RGB', 'RGBA'):
+                        img = img.convert('RGBA')
                 else:
+                    # Default to JPEG
                     save_format = 'JPEG'
                     if img.mode != 'RGB':
                         img = img.convert('RGB')
@@ -54,7 +66,12 @@ class ImageCompressor:
                 
                 # --- 分支 1: 固定质量模式 ---
                 if fixed_quality:
-                    img.save(output_path, format=save_format, quality=quality)
+                    if save_format == 'PNG':
+                        # PNG quality is not supported in the same way, use optimize=True
+                         img.save(output_path, format=save_format, optimize=True)
+                    else:
+                        img.save(output_path, format=save_format, quality=quality)
+                                            
                     size_kb = os.path.getsize(output_path) / 1024
                     return True, f"Fixed Quality (Q={quality})", size_kb
 
@@ -186,12 +203,12 @@ class ImageCompressor:
             name, ext = os.path.splitext(filename)
             if params.get('to_webp'):
                 out_filename = f"{name}.webp"
+            elif ext.lower() == '.png':
+                out_filename = f"{name}.png"
+            elif ext.lower() == '.webp':
+                out_filename = f"{name}.webp"
             else:
-                out_filename = f"{name}.jpg" # 默认统一转jpg简单点，或者保持原后缀
-                # 如果保持原后缀且不是webp
-                if not params.get('to_webp'):
-                   # 强制改为jpg如果原图不是jpg
-                   out_filename = f"{name}.jpg"
+                out_filename = f"{name}.jpg"
 
             output_path = os.path.join(output_dir, out_filename)
             
